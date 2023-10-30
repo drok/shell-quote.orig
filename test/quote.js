@@ -14,6 +14,7 @@ test('quote', function (t) {
 		'\'$\' \'`\' \\\''
 	);
 	t.equal(quote([]), '');
+	t.equal(quote(['']), "''");
 	t.equal(quote(["'"]), "\\'");
 	t.equal(quote(["''"]), "\\'\\'");
 	t.equal(quote(['a\nb']), "'a\nb'");

@@ -3,13 +3,16 @@ exports.quote = function (xs) {
         if (s && typeof s === 'object') {
             return s.op;
         }
+        else if(s === '') {
+            return "''";
+        }
         // Enclose strings with metacharacters in single quoted,
         // and escape any single quotes.
         // Match strictly to avoid escaping things that don't need to be.
         // bash: |  & ; ( ) < > space tab
         // Also escapes bash curly brace ranges {a..b} {a..z..3} {1..20} {a,b} but not
         // {a...b} or {..a}
-        if ((/(?:["\\$`!\s|&;\(\)<>]|{[\d]+\.{2}[\d]+(?:\.\.\d+)?}|{[a-zA-Z].{2}[a-zA-Z](?:\.\.\d+)?}|{[^{]*,[^}]*})/m).test(s)) {
+        else if ((/(?:["\\$`!\s|&;\(\)<>]|{[\d]+\.{2}[\d]+(?:\.\.\d+)?}|{[a-zA-Z].{2}[a-zA-Z](?:\.\.\d+)?}|{[^{]*,[^}]*})/m).test(s)) {
             // If input contains outer single quote, escape each of them individually.
             // eg. 'a b c' -> \''a b c'\'
             var outer_quotes = s.match(/^('*)(.*?)('*)$/s);
