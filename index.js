@@ -1,6 +1,9 @@
 exports.quote = function (xs) {
     return xs.map(function (s) {
         if (s && typeof s === 'object') {
+            if (s.op === 'glob') {
+                return s.pattern;
+            }
             return s.op;
         }
         else if(s === '') {

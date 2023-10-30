@@ -82,6 +82,14 @@ test('quote ops', function (t) {
 		quote(['a', { op: '&&' }, 'b', { op: ';' }, 'c']),
 		'a && b ; c'
 	);
+    t.equal(
+        quote([{ op: 'glob', pattern: '*'} ]),
+        '*'
+    )
+    t.equal(
+        quote([ 'a', { op: 'glob', pattern: 'b/*.c' } ]),
+        'a b/*.c'
+    )
 	t.end();
 });
 
