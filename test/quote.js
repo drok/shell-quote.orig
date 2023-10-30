@@ -72,6 +72,7 @@ test('quote', function (t) {
 	t.equal(quote(["'"]), "\\'");
 	t.equal(quote(['gcc', '-DVAR=value']), 'gcc -DVAR=value');
 	t.equal(quote(['gcc', '-DVAR=value with space']), "gcc '-DVAR=value with space'");
+	t.equal(quote(["This isn't OK!"]), "'This isn'\\''t OK!'");
 	t.end();
 });
 
