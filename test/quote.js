@@ -1,7 +1,30 @@
 var test = require('tape');
-var quote = require('../').quote;
+const { quote: uut_quote, quote_ascii: uut_quote_ascii } = require('../');
 
-test('quote', function (t) {
+const UUTs = [ { name: "quote", uut: uut_quote},
+	{ name: "quote_ascii", uut: uut_quote_ascii} ];
+var UUT = UUTs[0];
+var quote = UUT.uut;
+
+// This song-and-dance iteration, together with t.teardown(next_uut) allows the same test
+// suite to be called in turn on every UUT in the UUTs table
+// The problem is that the description string cannot say which UUT is being tested
+// If there is a way to pass an argument to the test battery, please let me know (PR)
+// An elegant solution would look like:
+// UUTs.forEach((uut, i) => test('quote['+uut.name+'] ops', shell_special_chars, uut));
+// instead of relying on t.teardown to iterate
+function next_uut() {
+	if (UUT === UUTs[UUTs.length - 1]) {
+		UUT = UUTs[0];
+	} else {
+		UUT = UUTs[UUTs.indexOf(UUT) + 1];
+	}
+	quote = UUT.uut;
+}
+
+function shell_special_chars(t) {
+	t.teardown(next_uut);
+
 	t.equal(quote(['a', 'b', 'c d']), "a b 'c d'");
 	var quoted = quote(['a', 'b', "it's a \"neat thing\""]);
 	t.equal(
@@ -66,17 +89,22 @@ test('quote', function (t) {
 	quoted = quote(['\\ \\']);
 	t.equal(quoted, "'\\ \\'");
 	t.isEqual(quoted.length, 5); // 3-char string + 2 quotes
-	// TODO: Ugly expansion of single quote at beginning or end of strings.
-	// Should return \'
 	t.equal(quote(["'$'"]), "\\''$'\\'");
 	t.equal(quote(["'"]), "\\'");
 	t.equal(quote(['gcc', '-DVAR=value']), 'gcc -DVAR=value');
 	t.equal(quote(['gcc', '-DVAR=value with space']), "gcc '-DVAR=value with space'");
 	t.equal(quote(["This isn't OK!"]), "'This isn'\\''t OK!'");
-	t.end();
-});
 
-test('quote unprintables', function (t) {
+	// chars for windows paths don't break out
+	t.equal(quote(['`:\\a\\b']), "'`:\\a\\b'");
+
+	t.end();
+};
+UUTs.forEach((uut, i) => test('quote['+i+'] ops', shell_special_chars));
+
+function unprintable_tests(t) {
+	t.teardown(next_uut);
+
 	t.equal(quote(['\x00']), "''");
 	t.equal(quote(['\x00']).length, 2); // two quotes
 	t.equal(quote(['\x01']), "\\x01");
@@ -95,16 +123,45 @@ test('quote unprintables', function (t) {
 	t.equal(quote(['\x1a\x1b\x1c\x1d\x1e\x1f']), "\\x1a\\E\\x1c\\x1d\\x1e\\x1f");
 	t.equal(quote(['\x1a\x1b\x1c\x1d\x1e\x1f']).length, 4 + 2 + 4 + 4 + 4 + 4);
 
-	/* Unicode */
-	t.equal(quote(['άψογος']), '\\u03ac\\u03c8\\u03bf\\u03b3\\u03bf\\u03c2');
-	t.equal(quote(['άψογος']).length, 36);
-	t.equal(quote(["άψο'γος"]), "\\u03ac\\u03c8\\u03bf\\'\\u03b3\\u03bf\\u03c2");
-	t.equal(quote(["άψο γος"]), "''\\u03ac\\u03c8\\u03bf' '\\u03b3\\u03bf\\u03c2''");
-	t.equal(quote(["άψ&ο γος"]), "''\\u03ac\\u03c8'&'\\u03bf' '\\u03b3\\u03bf\\u03c2''");
+	t.end();
+};
+UUTs.forEach((uut) => test('quote unprintables', unprintable_tests));
+
+test('quote Unicode', function (t) {
+	/* Unicode escaped to ascii */
+	t.equal(uut_quote_ascii(['άψογος']), '\\u03ac\\u03c8\\u03bf\\u03b3\\u03bf\\u03c2');
+	t.equal(uut_quote_ascii(['άψογος']).length, 36);
+	t.equal(uut_quote_ascii(["άψο'γος"]), "\\u03ac\\u03c8\\u03bf\\'\\u03b3\\u03bf\\u03c2");
+	t.equal(uut_quote_ascii(["άψο γος"]), "''\\u03ac\\u03c8\\u03bf' '\\u03b3\\u03bf\\u03c2''");
+	t.equal(uut_quote_ascii(["άψ&ο γος"]), "''\\u03ac\\u03c8'&'\\u03bf' '\\u03b3\\u03bf\\u03c2''");
+	t.equal(uut_quote_ascii(["άψ&ο γος"]), "''\\u03ac\\u03c8'&'\\u03bf' '\\u03b3\\u03bf\\u03c2''");
+
+	/* Unicode preserved */
+	t.equal(uut_quote(['άψογος']), 'άψογος');
+	t.equal(uut_quote(['άψογος']).length, 6);
+	t.equal(uut_quote(["άψο'γος"]), "άψο\\'γος");
+	t.equal(uut_quote(["άψο γος"]), "'άψο γος'");
+	t.equal(uut_quote(["άψ&ο γος"]), "'άψ&ο γος'");
+	t.equal(uut_quote(["άψ&ο γος"]), "'άψ&ο γος'");
+
 	t.end();
 });
 
-test('quote ops', function (t) {
+test('quote sandbox escape attempts', function (t) {
+	var user_input = "|-|ello world! | am Bobby⇥les; I have * your files now.";
+	var cmd_pipe = ['echo', '-n', user_input, {op: '|'}, 'grep', "-qi", "hello", {op: '||'}, 'echo', "Rude New User"];
+
+	t.equal(uut_quote(cmd_pipe),
+		"echo -n '|-|ello world! | am Bobby⇥les; I have * your files now.' | grep -qi hello || echo 'Rude New User'");
+	t.equal(uut_quote_ascii(cmd_pipe),
+			"echo -n '|-|ello world! | am Bobby'\\u21e5'les; I have * your files now.' | grep -qi hello || echo 'Rude New User'");
+
+	t.end();
+});
+
+function op_tests(t) {
+	t.teardown(next_uut);
+
 	t.equal(quote(['a', { op: '|' }, 'b']), 'a | b');
 	t.equal(
 		quote(['a', { op: '&&' }, 'b', { op: ';' }, 'c']),
@@ -119,18 +176,15 @@ test('quote ops', function (t) {
         'a b/*.c'
     )
 	t.end();
-});
+};
+UUTs.forEach((uut, i) => test('quote['+i+'] ops', op_tests));
 
-test('quote windows paths', { skip: 'breaking change, disabled until 2.x' }, function (t) {
+function windows_path_tests(t) {
 	var path = 'C:\\projects\\node-shell-quote\\index.js';
+	t.teardown(next_uut);
 
-	t.equal(quote([path, 'b', 'c d']), 'C:\\projects\\node-shell-quote\\index.js b \'c d\'');
+	t.equal(quote([path, 'b', 'c d']), "'C:\\projects\\node-shell-quote\\index.js' b 'c d'");
 
 	t.end();
-});
-
-test("chars for windows paths don't break out", function (t) {
-	var x = '`:\\a\\b';
-	t.equal(quote([x]), "'`:\\a\\b'");
-	t.end();
-});
+};
+UUTs.forEach((uut, i) => test('quote['+i+'] windows paths', windows_path_tests));
